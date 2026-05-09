@@ -152,7 +152,7 @@ export function App() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-4 text-slate-950 max-lg:h-dvh max-lg:overflow-hidden max-lg:px-3 max-lg:py-3 lg:px-8">
+    <main className="min-h-screen bg-slate-50 px-5 py-4 text-slate-950 max-md:h-dvh max-md:overflow-hidden max-md:px-3 max-md:py-3 md:px-6 lg:px-8">
       <style>
         {fonts
           .map(
@@ -160,15 +160,15 @@ export function App() {
           )
           .join("\n")}
       </style>
-      <header className="mx-auto mb-4 flex max-w-[1480px] items-center justify-between max-lg:mb-3 max-lg:h-10">
+      <header className="mx-auto mb-4 flex max-w-[1480px] items-center justify-between max-md:mb-3 max-md:h-10">
         <button
-          className="hidden size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 shadow-sm max-lg:grid"
+          className="hidden size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 shadow-sm max-md:grid"
           type="button"
           aria-label="Menu"
         >
           <Menu size={20} />
         </button>
-        <div className="flex items-center gap-2.5 text-owleaf max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2">
+        <div className="flex items-center gap-2.5 text-[#176c55] max-md:absolute max-md:left-1/2 max-md:-translate-x-1/2">
           <span className="grid size-8 place-items-center rounded-lg bg-[#176c55] text-white">
             <Leaf size={18} />
           </span>
@@ -184,9 +184,9 @@ export function App() {
         </button>
       </header>
 
-      <div className="mx-auto grid max-w-[1480px] gap-5 max-lg:flex max-lg:h-[calc(100dvh-3.25rem)] max-lg:flex-col max-lg:gap-3 lg:grid-cols-[530px_minmax(0,1fr)]">
-        <aside className="self-start rounded-lg border border-slate-200 bg-white/95 p-5 shadow-[0_18px_60px_rgba(15,34,52,0.08)] max-lg:order-2 max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:overflow-y-auto max-lg:p-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-          <div className="border-b border-slate-200 pb-5 max-lg:hidden">
+      <div className="mx-auto grid max-w-[1480px] gap-5 max-md:flex max-md:h-[calc(100dvh-3.25rem)] max-md:flex-col max-md:gap-3 md:grid-cols-[420px_minmax(0,1fr)] xl:grid-cols-[530px_minmax(0,1fr)]">
+        <aside className="self-start rounded-lg border border-slate-200 bg-white/95 p-5 shadow-[0_18px_60px_rgba(15,34,52,0.08)] max-md:order-2 max-md:min-h-0 max-md:w-full max-md:flex-1 max-md:overflow-y-auto max-md:p-3 md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] md:overflow-y-auto">
+          <div className="border-b border-slate-200 pb-5 max-md:hidden">
             <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-[#176c55]">
               Owleaf Engraving Studio
             </p>
@@ -197,7 +197,7 @@ export function App() {
 
           <MobileTabs active={mobileTab} onChange={setMobileTab} />
 
-          <section className={["border-b border-slate-200 py-5 max-lg:py-3", mobileTab !== "design" ? "max-lg:hidden" : ""].join(" ")}>
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "design" ? "max-md:hidden" : ""].join(" ")}>
             <PanelTitle
               title="Design"
               value={selectedDesign.id}
@@ -205,14 +205,14 @@ export function App() {
               onToggle={() => toggleSection("design")}
             />
             {openSections.design ? (
-            <div className="grid grid-cols-4 gap-3 max-lg:flex max-lg:overflow-x-auto max-lg:pb-2" aria-label="Wreath designs">
+            <div className="grid grid-cols-4 gap-3 max-md:flex max-md:overflow-x-auto max-md:pb-2" aria-label="Wreath designs">
               {designs.map((design) => {
                 const isActive = design.id === selectedDesignId;
 
                 return (
                   <button
                     className={[
-                      "relative grid aspect-square place-items-center rounded-lg border bg-white p-2 transition max-lg:size-24 max-lg:flex-none",
+                      "relative grid aspect-square place-items-center rounded-lg border bg-white p-2 transition max-md:size-24 max-md:flex-none",
                       isActive
                         ? "border-[#176c55] shadow-[0_0_0_2px_rgba(23,108,85,0.14)]"
                         : "border-slate-200 hover:border-[#176c55]/40",
@@ -244,7 +244,7 @@ export function App() {
             ) : null}
           </section>
 
-          <section className={["border-b border-slate-200 py-5 max-lg:py-3", mobileTab !== "text" ? "max-lg:hidden" : ""].join(" ")}>
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "text" ? "max-md:hidden" : ""].join(" ")}>
             <PanelTitle
               title="Text"
               open={openSections.text}
@@ -257,7 +257,7 @@ export function App() {
                 Engraving text
               </span>
               <textarea
-                className="min-h-28 resize-y rounded-lg border border-slate-300 px-3 py-3 text-sm leading-5 outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10 max-lg:min-h-24"
+                className="min-h-28 resize-y rounded-lg border border-slate-300 px-3 py-3 text-sm leading-5 outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10 max-md:min-h-24"
                 id="engraving-text"
                 value={text.value}
                 onChange={(event) => updateText("value", event.target.value)}
@@ -284,7 +284,7 @@ export function App() {
               </select>
             </label>
 
-            <div className="mb-4 grid grid-cols-2 gap-2 max-lg:hidden">
+            <div className="mb-4 grid grid-cols-2 gap-2 max-md:hidden">
               {fonts.map((font) => (
                 <button
                   className={[
@@ -333,7 +333,7 @@ export function App() {
             ) : null}
           </section>
 
-          <section className={["border-b border-slate-200 py-5 max-lg:py-3", mobileTab !== "position" ? "max-lg:hidden" : ""].join(" ")}>
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "position" ? "max-md:hidden" : ""].join(" ")}>
             <PanelTitle
               title="Position"
               open={openSections.position}
@@ -369,7 +369,7 @@ export function App() {
                 max={880}
                 value={text.x}
                 onChange={(value) => updateText("x", value)}
-                className="max-lg:hidden"
+                className="max-md:hidden"
               />
               <Range
                 label="Y position"
@@ -377,7 +377,7 @@ export function App() {
                 max={850}
                 value={text.y}
                 onChange={(value) => updateText("y", value)}
-                className="max-lg:hidden"
+                className="max-md:hidden"
               />
               <Range
                 label="Rotation"
@@ -386,7 +386,7 @@ export function App() {
                 value={text.rotation}
                 onChange={(value) => updateText("rotation", value)}
               />
-              <div className="mt-2 grid grid-cols-3 gap-2 max-lg:hidden">
+              <div className="mt-2 grid grid-cols-3 gap-2 max-md:hidden">
                 <button
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 transition hover:border-[#176c55]/40 hover:text-[#176c55]"
                   type="button"
@@ -416,7 +416,7 @@ export function App() {
             ) : null}
           </section>
 
-          <section className="pt-5 max-lg:pt-3">
+          <section className="pt-5 max-md:pt-3">
             <PanelTitle
               title="Export"
               open={openSections.export}
@@ -461,7 +461,7 @@ export function App() {
           </section>
         </aside>
 
-        <section className="grid min-w-0 gap-5 max-lg:order-1 max-lg:shrink-0 max-lg:gap-0">
+        <section className="grid min-w-0 gap-5 max-md:order-1 max-md:shrink-0 max-md:gap-0">
           {/* <div className="flex min-h-8 items-center rounded-lg border border-slate-200 bg-white/95 px-6 shadow-[0_18px_60px_rgba(15,34,52,0.08)]">
             <div className="grid gap-1">
               <strong className="text-lg font-extrabold leading-none text-slate-950">
@@ -474,7 +474,7 @@ export function App() {
           </div> */}
 
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white/95 shadow-[0_18px_60px_rgba(15,34,52,0.08)]">
-            <div className="hidden items-center justify-between border-b border-slate-200 px-6 py-5 lg:flex">
+            <div className="hidden items-center justify-between border-b border-slate-200 px-6 py-5 md:flex">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="mr-2 grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-white p-1">
                   {[
@@ -546,7 +546,7 @@ export function App() {
               </div>
             </div>
 
-            {/* <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 lg:hidden">
+            {/* <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 md:hidden">
               <div className="grid gap-1">
                 <strong className="text-lg font-extrabold leading-none text-slate-950">{selectedDesign.name}</strong>
                 <span className="text-sm font-medium text-slate-500">Font: {selectedFont.id}</span>
@@ -570,13 +570,13 @@ export function App() {
             <div
               className={[
                 previewMode === "cnc" ? "bg-slate-100" : showGrid ? "canvas-bg-grid" : "canvas-bg",
-                "grid min-h-[820px] place-items-center overflow-auto px-10 py-28 max-lg:h-[36dvh] max-lg:min-h-0 max-lg:px-4 max-lg:py-5",
+                "grid min-h-[820px] place-items-center overflow-auto px-10 py-28 max-md:h-[36dvh] max-md:min-h-0 max-md:px-4 max-md:py-5",
               ].join(" ")}
             >
               <div
                 ref={canvasRef}
                 className={[
-                  "relative aspect-square min-w-[360px] max-w-[820px] cursor-crosshair border border-slate-200 shadow-[0_16px_32px_rgba(25,32,40,0.18)] max-lg:min-w-0 max-lg:max-w-[72vw] [&_svg]:block [&_svg]:h-full [&_svg]:w-full",
+                  "relative aspect-square min-w-[360px] max-w-[820px] cursor-crosshair border border-slate-200 shadow-[0_16px_32px_rgba(25,32,40,0.18)] max-md:min-w-0 max-md:max-w-[72vw] [&_svg]:block [&_svg]:h-full [&_svg]:w-full",
                   previewMode === "cnc" ? "bg-transparent shadow-none" : "bg-white",
                 ].join(" ")}
                 style={{ width: `${zoom}%` }}
@@ -587,7 +587,7 @@ export function App() {
               />
             </div>
 
-            <footer className="grid gap-5 p-6 max-lg:hidden">
+            <footer className="grid gap-5 p-6 max-md:hidden">
               <div className="grid rounded-lg border border-slate-200 md:grid-cols-3">
                 <InfoItem
                   icon={<OwleafMini />}
@@ -665,7 +665,7 @@ function MobileTabs({
   ];
 
   return (
-    <div className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1 lg:hidden">
+    <div className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1 md:hidden">
       {tabs.map((tab) => (
         <button
           className={[
@@ -765,7 +765,7 @@ type RangeProps = {
 
 function Range({ label, min, max, step = 1, value, className = "", onChange }: RangeProps) {
   return (
-    <label className={["grid grid-cols-[112px_1fr_40px] items-center gap-3 max-lg:grid-cols-[120px_1fr_42px]", className].join(" ")}>
+    <label className={["grid grid-cols-[112px_1fr_40px] items-center gap-3 max-md:grid-cols-[120px_1fr_42px]", className].join(" ")}>
       <span className="text-xs font-bold text-slate-600">{label}</span>
       <input
         className="engraving-range w-full"
