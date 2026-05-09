@@ -42,3 +42,15 @@ select {
     #eee5d9;
   background-size: auto, 32px 32px, 32px 32px, auto;
 }
+
+@media (max-width: 767px) {
+  .mobile-canvas-stage {
+    height: 45dvh;
+    min-height: 340px;
+    overflow: hidden;
+  }
+
+  .mobile-artboard {
+    max-width: min(92vw, calc(45dvh - 18px));
+  }
+}

@@ -570,13 +570,13 @@ export function App() {
             <div
               className={[
                 previewMode === "cnc" ? "bg-slate-100" : showGrid ? "canvas-bg-grid" : "canvas-bg",
-                "grid min-h-[820px] place-items-center overflow-auto px-10 py-28 max-md:h-[36dvh] max-md:min-h-0 max-md:px-4 max-md:py-5",
+                "mobile-canvas-stage grid min-h-[820px] place-items-center overflow-auto px-10 py-28 max-md:min-h-0 max-md:overflow-hidden max-md:px-2 max-md:py-2",
               ].join(" ")}
             >
               <div
                 ref={canvasRef}
                 className={[
-                  "relative aspect-square min-w-[360px] max-w-[820px] cursor-crosshair border border-slate-200 shadow-[0_16px_32px_rgba(25,32,40,0.18)] max-md:min-w-0 max-md:max-w-[72vw] [&_svg]:block [&_svg]:h-full [&_svg]:w-full",
+                  "mobile-artboard relative aspect-square min-w-[360px] max-w-[820px] cursor-crosshair border border-slate-200 shadow-[0_16px_32px_rgba(25,32,40,0.18)] max-md:min-w-0 [&_svg]:block [&_svg]:h-full [&_svg]:w-full",
                   previewMode === "cnc" ? "bg-transparent shadow-none" : "bg-white",
                 ].join(" ")}
                 style={{ width: `${zoom}%` }}
