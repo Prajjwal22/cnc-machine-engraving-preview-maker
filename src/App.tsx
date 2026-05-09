@@ -369,7 +369,7 @@ export function App() {
                 max={880}
                 value={text.x}
                 onChange={(value) => updateText("x", value)}
-                className="max-md:hidden"
+                className=""
               />
               <Range
                 label="Y position"
@@ -377,7 +377,7 @@ export function App() {
                 max={850}
                 value={text.y}
                 onChange={(value) => updateText("y", value)}
-                className="max-md:hidden"
+                className=""
               />
               <Range
                 label="Rotation"
