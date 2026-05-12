@@ -26,6 +26,18 @@ export function buildEngravingSvg(design: Design, font: FontChoice, text: TextEx
     (line, index) =>
       `<tspan x="${text.x}" ${index === 0 ? "" : `dy="${text.lineHeight}em"`}>${escapeXml(line) || " "}</tspan>`,
   );
+  const wreathLayer = design.none
+    ? ""
+    : `
+      <image
+        id="${design.id}-wreath"
+        href="${escapeXml(design.src)}"
+        x="0"
+        y="0"
+        width="1000"
+        height="1000"
+        preserveAspectRatio="xMidYMid meet"
+      />`;
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img">
@@ -35,15 +47,7 @@ export function buildEngravingSvg(design: Design, font: FontChoice, text: TextEx
           src: url("${escapeXml(font.src)}");
         }
       </style>
-      <image
-        id="${design.id}-wreath"
-        href="${escapeXml(design.src)}"
-        x="0"
-        y="0"
-        width="1000"
-        height="1000"
-        preserveAspectRatio="xMidYMid meet"
-      />
+      ${wreathLayer}
       <text
         x="${text.x}"
         y="${text.y}"

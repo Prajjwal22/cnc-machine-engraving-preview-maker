@@ -3,6 +3,7 @@ export type Design = {
   name: string;
   src: string;
   missing?: boolean;
+  none?: boolean;
 };
 
 export type FontChoice = {
@@ -51,7 +52,20 @@ const fontEntries = Object.entries(fontFiles)
   .filter((entry) => Number.isFinite(entry.number))
   .sort((a, b) => a.number - b.number);
 
-export const designs: Design[] = Array.from({ length: 19 }, (_, index) => {
+const noWreathDesign: Design = {
+  id: "NONE",
+  name: "No Wreath",
+  none: true,
+  src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+      <rect width="1000" height="1000" fill="none"/>
+      <rect x="250" y="250" width="500" height="500" rx="40" fill="none" stroke="#cbd5e1" stroke-width="18" stroke-dasharray="42 28"/>
+      <text x="500" y="525" text-anchor="middle" font-family="Arial" font-size="82" font-weight="700" fill="#64748b">NONE</text>
+    </svg>
+  `.trim())}`,
+};
+
+const wreathDesigns: Design[] = Array.from({ length: 19 }, (_, index) => {
   const number = index + 1;
   const id = `D${number}`;
   const src = wreathByNumber.get(number);
@@ -63,6 +77,8 @@ export const designs: Design[] = Array.from({ length: 19 }, (_, index) => {
     missing: !src,
   };
 }).filter((design) => design.id !== "D10");
+
+export const designs: Design[] = [noWreathDesign, ...wreathDesigns];
 
 export const fonts: FontChoice[] = fontEntries.map(({ number, src }) => ({
   id: `F${number}`,

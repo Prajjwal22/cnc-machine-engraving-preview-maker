@@ -235,7 +235,7 @@ export function App() {
                       </span>
                     ) : null}
                     <strong className="absolute bottom-1 text-xs font-extrabold text-slate-600">
-                      {design.id}
+                      {design.none ? "None" : design.id}
                     </strong>
                   </button>
                 );
