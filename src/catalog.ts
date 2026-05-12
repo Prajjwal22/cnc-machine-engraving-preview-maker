@@ -78,7 +78,7 @@ const wreathDesigns: Design[] = Array.from({ length: 19 }, (_, index) => {
   };
 }).filter((design) => design.id !== "D10");
 
-export const designs: Design[] = [noWreathDesign, ...wreathDesigns];
+export const designs: Design[] = [ ...wreathDesigns, noWreathDesign];
 
 export const fonts: FontChoice[] = fontEntries.map(({ number, src }) => ({
   id: `F${number}`,

@@ -177,7 +177,7 @@ export async function downloadPng(svg: string) {
   }
 }
 
-export function openPrintablePdf(svg: string) {
+export function   openPrintablePdf(svg: string) {
   const printable = window.open("", "_blank", "popup,width=1100,height=900");
   if (!printable) {
     window.alert("Please allow popups to create the printable PDF preview.");
