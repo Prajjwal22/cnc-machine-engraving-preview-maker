@@ -2,8 +2,18 @@ export type Design = {
   id: string;
   name: string;
   src: string;
+  categoryId: DesignCategoryId;
+  label: string;
   missing?: boolean;
   none?: boolean;
+};
+
+export type DesignCategoryId = "round" | "heart";
+
+export type DesignCategory = {
+  id: DesignCategoryId;
+  name: string;
+  designs: Design[];
 };
 
 export type FontChoice = {
@@ -16,6 +26,12 @@ export type FontChoice = {
 };
 
 const wreathFiles = import.meta.glob("./assets/wreaths/*.{png,svg,jpg,jpeg}", {
+  eager: true,
+  import: "default",
+  query: "?url",
+}) as Record<string, string>;
+
+const heartWreathFiles = import.meta.glob("./assets/heart-wreaths/*.{png,svg,jpg,jpeg}", {
   eager: true,
   import: "default",
   query: "?url",
@@ -47,6 +63,11 @@ const wreathByNumber = new Map(
   Object.entries(wreathFiles).map(([path, src]) => [fileNumber(path, "d"), src]),
 );
 
+const heartWreathEntries = Object.entries(heartWreathFiles)
+  .map(([path, src]) => ({ number: fileNumber(path, "d"), src }))
+  .filter((entry) => Number.isFinite(entry.number))
+  .sort((a, b) => a.number - b.number);
+
 const fontEntries = Object.entries(fontFiles)
   .map(([path, src]) => ({ number: fileNumber(path, "f"), src }))
   .filter((entry) => Number.isFinite(entry.number))
@@ -55,6 +76,8 @@ const fontEntries = Object.entries(fontFiles)
 const noWreathDesign: Design = {
   id: "NONE",
   name: "No Wreath",
+  categoryId: "round",
+  label: "None",
   none: true,
   src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
@@ -72,13 +95,40 @@ const wreathDesigns: Design[] = Array.from({ length: 19 }, (_, index) => {
 
   return {
     id,
-    name: `Wreath Design ${id}`,
+    name: `Round Wreath ${id}`,
+    categoryId: "round" as const,
+    label: id,
     src: src ?? placeholderDesign(id),
     missing: !src,
   };
 }).filter((design) => design.id !== "D10");
 
-export const designs: Design[] = [ ...wreathDesigns, noWreathDesign];
+const heartWreathDesigns: Design[] = heartWreathEntries.map(({ number, src }) => {
+  const label = `D${number}`;
+
+  return {
+    id: `H${number}`,
+    name: `Heart Wreath ${label}`,
+    categoryId: "heart",
+    label,
+    src,
+  };
+});
+
+export const designCategories: DesignCategory[] = [
+  {
+    id: "round",
+    name: "Round Wreath",
+    designs: [...wreathDesigns, noWreathDesign],
+  },
+  {
+    id: "heart",
+    name: "Heart Wreath",
+    designs: heartWreathDesigns,
+  },
+];
+
+export const designs: Design[] = designCategories.flatMap((category) => category.designs);
 
 export const fonts: FontChoice[] = fontEntries.map(({ number, src }) => ({
   id: `F${number}`,

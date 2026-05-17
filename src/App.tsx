@@ -1,5 +1,6 @@
 import { ChangeEvent, PointerEvent, useMemo, useRef, useState } from "react";
 import {
+  Check,
   ChevronDown,
   Crosshair,
   Download,
@@ -19,7 +20,7 @@ import {
   Type,
   Upload,
 } from "lucide-react";
-import { designs, fonts } from "./catalog";
+import { designCategories, designs, fonts, type DesignCategoryId } from "./catalog";
 import {
   buildEngravingSvg,
   downloadPng,
@@ -61,6 +62,8 @@ const iconSize = 16;
 
 export function App() {
   const [selectedDesignId, setSelectedDesignId] = useState("D1");
+  const [selectedDesignCategoryId, setSelectedDesignCategoryId] =
+    useState<DesignCategoryId>("round");
   const [text, setText] = useState<TextState>(initialText);
   const [showGrid, setShowGrid] = useState(false);
   const [zoom, setZoom] = useState(100);
@@ -79,6 +82,10 @@ export function App() {
       designs.find((design) => design.id === selectedDesignId) ?? designs[0],
     [selectedDesignId],
   );
+  const selectedDesignCategory =
+    designCategories.find((category) => category.id === selectedDesignCategoryId) ??
+    designCategories[0];
+  const visibleDesigns = selectedDesignCategory.designs;
   const selectedFont =
     fonts.find((font) => font.id === text.fontId) ?? fonts[0];
   const previewSvg = buildEngravingSvg(selectedDesign, selectedFont, text);
@@ -122,7 +129,10 @@ export function App() {
       .text()
       .then((raw) => JSON.parse(raw) as { designId: string; text: TextState })
       .then((project) => {
-        setSelectedDesignId(project.designId);
+        const importedDesign =
+          designs.find((design) => design.id === project.designId) ?? designs[0];
+        setSelectedDesignId(importedDesign.id);
+        setSelectedDesignCategoryId(importedDesign.categoryId);
         setText({ ...initialText, ...project.text });
       })
       .catch(() => {
@@ -145,6 +155,7 @@ export function App() {
 
   function resetAll() {
     setSelectedDesignId("D1");
+    setSelectedDesignCategoryId("round");
     setText(initialText);
     setShowGrid(false);
     setZoom(100);
@@ -200,13 +211,37 @@ export function App() {
           <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "design" ? "max-md:hidden" : ""].join(" ")}>
             <PanelTitle
               title="Design"
-              value={selectedDesign.id}
+              value={selectedDesign.label}
               open={openSections.design}
               onToggle={() => toggleSection("design")}
             />
             {openSections.design ? (
-            <div className="grid grid-cols-4 gap-3 max-md:flex max-md:overflow-x-auto max-md:pb-2" aria-label="Wreath designs">
-              {designs.map((design) => {
+            <>
+            <div
+              className="mb-3 grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-white p-1"
+              aria-label="Wreath category"
+            >
+              {designCategories.map((category) => (
+                <button
+                  className={[
+                    "h-9 rounded-md px-2 text-xs font-extrabold transition",
+                    selectedDesignCategoryId === category.id
+                      ? "bg-[#176c55] text-white"
+                      : "text-slate-700 hover:bg-slate-50",
+                  ].join(" ")}
+                  key={category.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedDesignCategoryId(category.id);
+                    setSelectedDesignId(category.designs[0]?.id ?? "D1");
+                  }}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-4 gap-3 max-md:flex max-md:overflow-x-auto max-md:pb-2" aria-label={`${selectedDesignCategory.name} designs`}>
+              {visibleDesigns.map((design) => {
                 const isActive = design.id === selectedDesignId;
 
                 return (
@@ -231,16 +266,17 @@ export function App() {
                     />
                     {isActive ? (
                       <span className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-[#176c55] text-xs font-bold text-white">
-                        ✓
+                        <Check size={14} strokeWidth={3} />
                       </span>
                     ) : null}
                     <strong className="absolute bottom-1 text-xs font-extrabold text-slate-600">
-                      {design.none ? "None" : design.id}
+                      {design.label}
                     </strong>
                   </button>
                 );
               })}
             </div>
+            </>
             ) : null}
           </section>
 
