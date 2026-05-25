@@ -50,7 +50,7 @@ const initialText: TextState = {
   value: "",
   fontId: "F1",
   size: 63,
-  letterSpacing: 2,
+  letterSpacing: 0,
   lineHeight: 1.2,
   x: 500,
   y: 510,
