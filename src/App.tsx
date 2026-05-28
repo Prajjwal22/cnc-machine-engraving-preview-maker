@@ -33,6 +33,7 @@ type Align = "start" | "middle" | "end";
 type TextState = {
   value: string;
   fontId: string;
+  fontRuns: TextFontRun[];
   size: number;
   letterSpacing: number;
   lineHeight: number;
@@ -42,6 +43,17 @@ type TextState = {
   align: Align;
 };
 
+type TextFontRun = {
+  start: number;
+  end: number;
+  fontId: string;
+};
+
+type TextSelection = {
+  start: number;
+  end: number;
+};
+
 type SectionId = "design" | "text" | "position" | "export";
 type PreviewMode = "customer" | "cnc";
 type MobileTab = "design" | "text" | "position";
@@ -49,6 +61,7 @@ type MobileTab = "design" | "text" | "position";
 const initialText: TextState = {
   value: "",
   fontId: "F1",
+  fontRuns: [],
   size: 63,
   letterSpacing: 0,
   lineHeight: 1.2,
@@ -59,6 +72,125 @@ const initialText: TextState = {
 };
 
 const iconSize = 16;
+
+function normalizeFontRuns(runs: TextFontRun[], length: number) {
+  const normalized = runs
+    .map((run) => ({
+      ...run,
+      start: Math.max(0, Math.min(length, run.start)),
+      end: Math.max(0, Math.min(length, run.end)),
+    }))
+    .filter((run) => run.end > run.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  return normalized.reduce<TextFontRun[]>((merged, run) => {
+    const previous = merged[merged.length - 1];
+
+    if (previous && previous.fontId === run.fontId && previous.end === run.start) {
+      previous.end = run.end;
+      return merged;
+    }
+
+    merged.push(run);
+    return merged;
+  }, []);
+}
+
+function updateFontRunsForValueChange(oldValue: string, nextValue: string, runs: TextFontRun[]) {
+  let prefixLength = 0;
+  while (
+    prefixLength < oldValue.length &&
+    prefixLength < nextValue.length &&
+    oldValue[prefixLength] === nextValue[prefixLength]
+  ) {
+    prefixLength += 1;
+  }
+
+  let suffixLength = 0;
+  while (
+    suffixLength < oldValue.length - prefixLength &&
+    suffixLength < nextValue.length - prefixLength &&
+    oldValue[oldValue.length - 1 - suffixLength] === nextValue[nextValue.length - 1 - suffixLength]
+  ) {
+    suffixLength += 1;
+  }
+
+  const oldChangeEnd = oldValue.length - suffixLength;
+  const nextChangeEnd = nextValue.length - suffixLength;
+  const delta = nextChangeEnd - oldChangeEnd;
+  const updated: TextFontRun[] = [];
+
+  runs.forEach((run) => {
+    if (run.end <= prefixLength) {
+      updated.push(run);
+      return;
+    }
+
+    if (run.start >= oldChangeEnd) {
+      updated.push({ ...run, start: run.start + delta, end: run.end + delta });
+      return;
+    }
+
+    if (run.start < prefixLength) {
+      updated.push({ ...run, end: prefixLength });
+    }
+
+    if (run.end > oldChangeEnd) {
+      updated.push({ ...run, start: nextChangeEnd, end: run.end + delta });
+    }
+  });
+
+  return normalizeFontRuns(updated, nextValue.length);
+}
+
+function applyFontRun(
+  runs: TextFontRun[],
+  selection: TextSelection,
+  fontId: string,
+  defaultFontId: string,
+  length: number,
+) {
+  const start = Math.max(0, Math.min(length, Math.min(selection.start, selection.end)));
+  const end = Math.max(0, Math.min(length, Math.max(selection.start, selection.end)));
+
+  if (start === end) {
+    return normalizeFontRuns(runs, length);
+  }
+
+  const updated: TextFontRun[] = [];
+  runs.forEach((run) => {
+    if (run.end <= start || run.start >= end) {
+      updated.push(run);
+      return;
+    }
+
+    if (run.start < start) {
+      updated.push({ ...run, end: start });
+    }
+
+    if (run.end > end) {
+      updated.push({ ...run, start: end });
+    }
+  });
+
+  if (fontId !== defaultFontId) {
+    updated.push({ start, end, fontId });
+  }
+
+  return normalizeFontRuns(updated, length);
+}
+
+function selectedFontIdForRange(text: TextState, selection: TextSelection) {
+  if (selection.end <= selection.start) {
+    return undefined;
+  }
+
+  const matchingRun = text.fontRuns.find(
+    (run) => selection.start >= run.start && selection.end <= run.end,
+  );
+
+  return matchingRun?.fontId ?? text.fontId;
+}
 
 export function App() {
   const [selectedDesignId, setSelectedDesignId] = useState("D1");
@@ -76,6 +208,11 @@ export function App() {
     export: true,
   });
   const canvasRef = useRef<HTMLDivElement>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const [textSelection, setTextSelection] = useState<TextSelection>({
+    start: 0,
+    end: 0,
+  });
 
   const selectedDesign = useMemo(
     () =>
@@ -88,10 +225,53 @@ export function App() {
   const visibleDesigns = selectedDesignCategory.designs;
   const selectedFont =
     fonts.find((font) => font.id === text.fontId) ?? fonts[0];
-  const previewSvg = buildEngravingSvg(selectedDesign, selectedFont, text);
+  const selectionFontId = selectedFontIdForRange(text, textSelection) ?? text.fontId;
+  const hasSelectedText = textSelection.end > textSelection.start;
+  const previewSvg = buildEngravingSvg(selectedDesign, selectedFont, text, fonts);
 
   function updateText<T extends keyof TextState>(key: T, value: TextState[T]) {
     setText((current) => ({ ...current, [key]: value }));
+  }
+
+  function captureTextSelection(target: HTMLTextAreaElement) {
+    setTextSelection({
+      start: target.selectionStart,
+      end: target.selectionEnd,
+    });
+  }
+
+  function handleTextValueChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    const nextValue = event.target.value;
+    captureTextSelection(event.target);
+    setText((current) => ({
+      ...current,
+      value: nextValue,
+      fontRuns: updateFontRunsForValueChange(current.value, nextValue, current.fontRuns),
+    }));
+  }
+
+  function applyFontChoice(fontId: string) {
+    setText((current) => {
+      if (!hasSelectedText) {
+        return {
+          ...current,
+          fontId,
+          fontRuns: current.fontRuns.filter((run) => run.fontId !== fontId),
+        };
+      }
+
+      return {
+        ...current,
+        fontRuns: applyFontRun(
+          current.fontRuns,
+          textSelection,
+          fontId,
+          current.fontId,
+          current.value.length,
+        ),
+      };
+    });
+    textAreaRef.current?.focus();
   }
 
   function toggleSection(section: SectionId) {
@@ -293,10 +473,14 @@ export function App() {
                 Engraving text
               </span>
               <textarea
+                ref={textAreaRef}
                 className="min-h-28 resize-y rounded-lg border border-slate-300 px-3 py-3 text-sm leading-5 outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10 max-md:min-h-24"
                 id="engraving-text"
                 value={text.value}
-                onChange={(event) => updateText("value", event.target.value)}
+                onChange={handleTextValueChange}
+                onKeyUp={(event) => captureTextSelection(event.currentTarget)}
+                onMouseUp={(event) => captureTextSelection(event.currentTarget)}
+                onSelect={(event) => captureTextSelection(event.currentTarget)}
                 placeholder="Enter customer text"
                 rows={4}
               />
@@ -309,8 +493,8 @@ export function App() {
               <select
                 className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
                 id="font-style"
-                value={text.fontId}
-                onChange={(event) => updateText("fontId", event.target.value)}
+                value={hasSelectedText ? selectionFontId : text.fontId}
+                onChange={(event) => applyFontChoice(event.target.value)}
               >
                 {fonts.map((font) => (
                   <option key={font.id} value={font.id}>
@@ -325,13 +509,14 @@ export function App() {
                 <button
                   className={[
                     "flex h-12 items-center justify-between rounded-lg border px-3 text-left transition",
-                    text.fontId === font.id
+                    (hasSelectedText ? selectionFontId : text.fontId) === font.id
                       ? "border-[#176c55] bg-[#e7f3ef] text-[#0e4f3f]"
                       : "border-slate-200 bg-white text-slate-700 hover:border-[#176c55]/40",
                   ].join(" ")}
                   key={font.id}
                   type="button"
-                  onClick={() => updateText("fontId", font.id)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => applyFontChoice(font.id)}
                 >
                   <span className="text-xs font-extrabold">{font.id}</span>
                   <span className="truncate text-lg" style={{ fontFamily: font.family }}>

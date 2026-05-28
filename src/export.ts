@@ -2,6 +2,8 @@ import type { Design, FontChoice } from "./catalog";
 
 type TextExport = {
   value: string;
+  fontId?: string;
+  fontRuns?: TextFontRun[];
   size: number;
   letterSpacing: number;
   lineHeight: number;
@@ -9,6 +11,12 @@ type TextExport = {
   y: number;
   rotation: number;
   align: "start" | "middle" | "end";
+};
+
+type TextFontRun = {
+  start: number;
+  end: number;
+  fontId: string;
 };
 
 function escapeXml(value: string) {
@@ -20,12 +28,72 @@ function escapeXml(value: string) {
     .replace(/'/g, "&apos;");
 }
 
-export function buildEngravingSvg(design: Design, font: FontChoice, text: TextExport) {
-  const lines = text.value.split(/\r?\n/);
-  const safeLines = (lines.length ? lines : [""]).map(
-    (line, index) =>
-      `<tspan x="${text.x}" ${index === 0 ? "" : `dy="${text.lineHeight}em"`}>${escapeXml(line) || " "}</tspan>`,
+function fontForIndex(index: number, fallbackFont: FontChoice, fonts: FontChoice[], runs: TextFontRun[] = []) {
+  const run = runs.find((entry) => index >= entry.start && index < entry.end);
+  return fonts.find((entry) => entry.id === run?.fontId) ?? fallbackFont;
+}
+
+function renderLine(
+  line: string,
+  lineStart: number,
+  lineIndex: number,
+  fallbackFont: FontChoice,
+  fonts: FontChoice[],
+  runs: TextFontRun[] = [],
+  lineHeight: number,
+  x: number,
+) {
+  const dy = lineIndex === 0 ? "" : `dy="${lineHeight}em"`;
+
+  if (!line) {
+    return `<tspan x="${x}" ${dy}> </tspan>`;
+  }
+
+  const segments: string[] = [];
+  let segmentStart = 0;
+  let segmentFont = fontForIndex(lineStart, fallbackFont, fonts, runs);
+
+  for (let index = 1; index < line.length; index += 1) {
+    const nextFont = fontForIndex(lineStart + index, fallbackFont, fonts, runs);
+
+    if (nextFont.id !== segmentFont.id) {
+      segments.push(
+        `<tspan font-family="${escapeXml(segmentFont.family)}">${escapeXml(line.slice(segmentStart, index))}</tspan>`,
+      );
+      segmentStart = index;
+      segmentFont = nextFont;
+    }
+  }
+
+  segments.push(
+    `<tspan font-family="${escapeXml(segmentFont.family)}">${escapeXml(line.slice(segmentStart))}</tspan>`,
   );
+
+  return `<tspan x="${x}" ${dy}>${segments.join("")}</tspan>`;
+}
+
+export function buildEngravingSvg(
+  design: Design,
+  font: FontChoice,
+  text: TextExport,
+  fonts: FontChoice[] = [font],
+) {
+  const lines = text.value.split(/\r?\n/);
+  let lineStart = 0;
+  const safeLines = (lines.length ? lines : [""]).map((line, index) => {
+    const rendered = renderLine(
+      line,
+      lineStart,
+      index,
+      font,
+      fonts,
+      text.fontRuns,
+      text.lineHeight,
+      text.x,
+    );
+    lineStart += line.length + 1;
+    return rendered;
+  });
   const wreathLayer = design.none
     ? ""
     : `
@@ -42,10 +110,14 @@ export function buildEngravingSvg(design: Design, font: FontChoice, text: TextEx
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img">
       <style>
-        @font-face {
-          font-family: "${escapeXml(font.family)}";
-          src: url("${escapeXml(font.src)}");
-        }
+        ${fonts
+          .map(
+            (entry) => `@font-face {
+          font-family: "${escapeXml(entry.family)}";
+          src: url("${escapeXml(entry.src)}");
+        }`,
+          )
+          .join("\n")}
       </style>
       ${wreathLayer}
       <text
@@ -59,6 +131,7 @@ export function buildEngravingSvg(design: Design, font: FontChoice, text: TextEx
         font-style="${font.style ?? "normal"}"
         letter-spacing="${text.letterSpacing}"
         fill="#111827"
+        xml:space="preserve"
       >${safeLines.join("")}</text>
     </svg>
   `.trim();
