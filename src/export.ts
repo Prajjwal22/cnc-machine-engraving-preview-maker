@@ -4,6 +4,7 @@ type TextExport = {
   value: string;
   fontId?: string;
   fontRuns?: TextFontRun[];
+  sizeRuns?: TextSizeRun[];
   size: number;
   letterSpacing: number;
   lineHeight: number;
@@ -17,6 +18,12 @@ type TextFontRun = {
   start: number;
   end: number;
   fontId: string;
+};
+
+type TextSizeRun = {
+  start: number;
+  end: number;
+  size: number;
 };
 
 function escapeXml(value: string) {
@@ -33,6 +40,11 @@ function fontForIndex(index: number, fallbackFont: FontChoice, fonts: FontChoice
   return fonts.find((entry) => entry.id === run?.fontId) ?? fallbackFont;
 }
 
+function sizeForIndex(index: number, fallbackSize: number, runs: TextSizeRun[] = []) {
+  const run = runs.find((entry) => index >= entry.start && index < entry.end);
+  return run?.size ?? fallbackSize;
+}
+
 function renderLine(
   line: string,
   lineStart: number,
@@ -40,6 +52,8 @@ function renderLine(
   fallbackFont: FontChoice,
   fonts: FontChoice[],
   runs: TextFontRun[] = [],
+  sizeRuns: TextSizeRun[] = [],
+  fallbackSize: number,
   lineHeight: number,
   x: number,
 ) {
@@ -52,21 +66,24 @@ function renderLine(
   const segments: string[] = [];
   let segmentStart = 0;
   let segmentFont = fontForIndex(lineStart, fallbackFont, fonts, runs);
+  let segmentSize = sizeForIndex(lineStart, fallbackSize, sizeRuns);
 
   for (let index = 1; index < line.length; index += 1) {
     const nextFont = fontForIndex(lineStart + index, fallbackFont, fonts, runs);
+    const nextSize = sizeForIndex(lineStart + index, fallbackSize, sizeRuns);
 
-    if (nextFont.id !== segmentFont.id) {
+    if (nextFont.id !== segmentFont.id || nextSize !== segmentSize) {
       segments.push(
-        `<tspan font-family="${escapeXml(segmentFont.family)}">${escapeXml(line.slice(segmentStart, index))}</tspan>`,
+        `<tspan font-family="${escapeXml(segmentFont.family)}" font-size="${segmentSize}">${escapeXml(line.slice(segmentStart, index))}</tspan>`,
       );
       segmentStart = index;
       segmentFont = nextFont;
+      segmentSize = nextSize;
     }
   }
 
   segments.push(
-    `<tspan font-family="${escapeXml(segmentFont.family)}">${escapeXml(line.slice(segmentStart))}</tspan>`,
+    `<tspan font-family="${escapeXml(segmentFont.family)}" font-size="${segmentSize}">${escapeXml(line.slice(segmentStart))}</tspan>`,
   );
 
   return `<tspan x="${x}" ${dy}>${segments.join("")}</tspan>`;
@@ -88,6 +105,8 @@ export function buildEngravingSvg(
       font,
       fonts,
       text.fontRuns,
+      text.sizeRuns,
+      text.size,
       text.lineHeight,
       text.x,
     );

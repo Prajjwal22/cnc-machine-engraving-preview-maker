@@ -34,6 +34,7 @@ type TextState = {
   value: string;
   fontId: string;
   fontRuns: TextFontRun[];
+  sizeRuns: TextSizeRun[];
   size: number;
   letterSpacing: number;
   lineHeight: number;
@@ -49,6 +50,12 @@ type TextFontRun = {
   fontId: string;
 };
 
+type TextSizeRun = {
+  start: number;
+  end: number;
+  size: number;
+};
+
 type TextSelection = {
   start: number;
   end: number;
@@ -62,6 +69,7 @@ const initialText: TextState = {
   value: "",
   fontId: "F1",
   fontRuns: [],
+  sizeRuns: [],
   size: 63,
   letterSpacing: 0,
   lineHeight: 1.2,
@@ -96,7 +104,44 @@ function normalizeFontRuns(runs: TextFontRun[], length: number) {
   }, []);
 }
 
+function normalizeSizeRuns(runs: TextSizeRun[], length: number) {
+  const normalized = runs
+    .map((run) => ({
+      ...run,
+      start: Math.max(0, Math.min(length, run.start)),
+      end: Math.max(0, Math.min(length, run.end)),
+      size: Math.round(run.size),
+    }))
+    .filter((run) => run.end > run.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  return normalized.reduce<TextSizeRun[]>((merged, run) => {
+    const previous = merged[merged.length - 1];
+
+    if (previous && previous.size === run.size && previous.end === run.start) {
+      previous.end = run.end;
+      return merged;
+    }
+
+    merged.push(run);
+    return merged;
+  }, []);
+}
+
 function updateFontRunsForValueChange(oldValue: string, nextValue: string, runs: TextFontRun[]) {
+  return updateRunsForValueChange(oldValue, nextValue, runs, normalizeFontRuns);
+}
+
+function updateSizeRunsForValueChange(oldValue: string, nextValue: string, runs: TextSizeRun[]) {
+  return updateRunsForValueChange(oldValue, nextValue, runs, normalizeSizeRuns);
+}
+
+function updateRunsForValueChange<Run extends { start: number; end: number }>(
+  oldValue: string,
+  nextValue: string,
+  runs: Run[],
+  normalize: (runs: Run[], length: number) => Run[],
+) {
   let prefixLength = 0;
   while (
     prefixLength < oldValue.length &&
@@ -118,7 +163,7 @@ function updateFontRunsForValueChange(oldValue: string, nextValue: string, runs:
   const oldChangeEnd = oldValue.length - suffixLength;
   const nextChangeEnd = nextValue.length - suffixLength;
   const delta = nextChangeEnd - oldChangeEnd;
-  const updated: TextFontRun[] = [];
+  const updated: Run[] = [];
 
   runs.forEach((run) => {
     if (run.end <= prefixLength) {
@@ -140,7 +185,7 @@ function updateFontRunsForValueChange(oldValue: string, nextValue: string, runs:
     }
   });
 
-  return normalizeFontRuns(updated, nextValue.length);
+  return normalize(updated, nextValue.length);
 }
 
 function applyFontRun(
@@ -180,6 +225,43 @@ function applyFontRun(
   return normalizeFontRuns(updated, length);
 }
 
+function applySizeRun(
+  runs: TextSizeRun[],
+  selection: TextSelection,
+  size: number,
+  defaultSize: number,
+  length: number,
+) {
+  const start = Math.max(0, Math.min(length, Math.min(selection.start, selection.end)));
+  const end = Math.max(0, Math.min(length, Math.max(selection.start, selection.end)));
+
+  if (start === end) {
+    return normalizeSizeRuns(runs, length);
+  }
+
+  const updated: TextSizeRun[] = [];
+  runs.forEach((run) => {
+    if (run.end <= start || run.start >= end) {
+      updated.push(run);
+      return;
+    }
+
+    if (run.start < start) {
+      updated.push({ ...run, end: start });
+    }
+
+    if (run.end > end) {
+      updated.push({ ...run, start: end });
+    }
+  });
+
+  if (size !== defaultSize) {
+    updated.push({ start, end, size });
+  }
+
+  return normalizeSizeRuns(updated, length);
+}
+
 function selectedFontIdForRange(text: TextState, selection: TextSelection) {
   if (selection.end <= selection.start) {
     return undefined;
@@ -190,6 +272,18 @@ function selectedFontIdForRange(text: TextState, selection: TextSelection) {
   );
 
   return matchingRun?.fontId ?? text.fontId;
+}
+
+function selectedSizeForRange(text: TextState, selection: TextSelection) {
+  if (selection.end <= selection.start) {
+    return undefined;
+  }
+
+  const matchingRun = text.sizeRuns.find(
+    (run) => selection.start >= run.start && selection.end <= run.end,
+  );
+
+  return matchingRun?.size ?? text.size;
 }
 
 export function App() {
@@ -226,6 +320,7 @@ export function App() {
   const selectedFont =
     fonts.find((font) => font.id === text.fontId) ?? fonts[0];
   const selectionFontId = selectedFontIdForRange(text, textSelection) ?? text.fontId;
+  const activeSize = selectedSizeForRange(text, textSelection) ?? text.size;
   const hasSelectedText = textSelection.end > textSelection.start;
   const previewSvg = buildEngravingSvg(selectedDesign, selectedFont, text, fonts);
 
@@ -247,6 +342,7 @@ export function App() {
       ...current,
       value: nextValue,
       fontRuns: updateFontRunsForValueChange(current.value, nextValue, current.fontRuns),
+      sizeRuns: updateSizeRunsForValueChange(current.value, nextValue, current.sizeRuns),
     }));
   }
 
@@ -267,6 +363,30 @@ export function App() {
           textSelection,
           fontId,
           current.fontId,
+          current.value.length,
+        ),
+      };
+    });
+    textAreaRef.current?.focus();
+  }
+
+  function applySizeChoice(size: number) {
+    setText((current) => {
+      if (!hasSelectedText) {
+        return {
+          ...current,
+          size,
+          sizeRuns: current.sizeRuns.filter((run) => run.size !== size),
+        };
+      }
+
+      return {
+        ...current,
+        sizeRuns: applySizeRun(
+          current.sizeRuns,
+          textSelection,
+          size,
+          current.size,
           current.value.length,
         ),
       };
@@ -488,7 +608,7 @@ export function App() {
 
             <label className="mb-4 grid gap-2" htmlFor="font-style">
               <span className="text-xs font-bold text-slate-600">
-                Font style
+                {hasSelectedText ? "Selected text font" : "Font style"}
               </span>
               <select
                 className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
@@ -503,6 +623,16 @@ export function App() {
                 ))}
               </select>
             </label>
+
+            {hasSelectedText ? (
+              <div className="mb-4 rounded-lg border border-[#176c55]/20 bg-[#e7f3ef] px-3 py-2 text-xs font-semibold text-[#0e4f3f]">
+                Styling selected text from character {textSelection.start + 1} to {textSelection.end}.
+              </div>
+            ) : (
+              <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+                Select text above, then choose a font or size to style only that part.
+              </div>
+            )}
 
             <div className="mb-4 grid grid-cols-2 gap-2 max-md:hidden">
               {fonts.map((font) => (
@@ -563,11 +693,11 @@ export function App() {
             {openSections.position ? (
             <div className="grid gap-3">
               <Range
-                label="Size"
+                label={hasSelectedText ? "Selected size" : "Size"}
                 min={16}
                 max={120}
-                value={text.size}
-                onChange={(value) => updateText("size", value)}
+                value={activeSize}
+                onChange={applySizeChoice}
               />
               <Range
                 label="Letter spacing"
