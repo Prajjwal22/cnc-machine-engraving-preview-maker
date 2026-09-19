@@ -26,6 +26,19 @@ type TextSizeRun = {
   size: number;
 };
 
+export type CircularTextExport = {
+  top: string;
+  bottom: string;
+  topFontId: string;
+  bottomFontId: string;
+  topSizeRuns?: TextSizeRun[];
+  bottomSizeRuns?: TextSizeRun[];
+  size: number;
+  letterSpacing: number;
+  radius: number;
+  y: number;
+};
+
 function escapeXml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -94,6 +107,10 @@ export function buildEngravingSvg(
   font: FontChoice,
   text: TextExport,
   fonts: FontChoice[] = [font],
+  circularText?: CircularTextExport,
+  includeStraightText = true,
+  includeDesign = true,
+  showCircularGuides = false,
 ) {
   const lines = text.value.split(/\r?\n/);
   let lineStart = 0;
@@ -113,7 +130,7 @@ export function buildEngravingSvg(
     lineStart += line.length + 1;
     return rendered;
   });
-  const wreathLayer = design.none
+  const wreathLayer = design.none || !includeDesign
     ? ""
     : `
       <image
@@ -125,6 +142,24 @@ export function buildEngravingSvg(
         height="1000"
         preserveAspectRatio="xMidYMid meet"
       />`;
+  const straightTextLayer = includeStraightText
+    ? `<text
+        x="${text.x}"
+        y="${text.y}"
+        text-anchor="${text.align}"
+        transform="rotate(${text.rotation} ${text.x} ${text.y})"
+        font-family="${escapeXml(font.family)}"
+        font-size="${text.size}"
+        font-weight="${font.weight ?? 400}"
+        font-style="${font.style ?? "normal"}"
+        letter-spacing="${text.letterSpacing}"
+        fill="#111827"
+        xml:space="preserve"
+      >${safeLines.join("")}</text>`
+    : "";
+  const circularTextLayer = circularText
+    ? renderCircularText(circularText, fonts, font, showCircularGuides)
+    : "";
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img">
@@ -139,21 +174,85 @@ export function buildEngravingSvg(
           .join("\n")}
       </style>
       ${wreathLayer}
-      <text
-        x="${text.x}"
-        y="${text.y}"
-        text-anchor="${text.align}"
-        transform="rotate(${text.rotation} ${text.x} ${text.y})"
-        font-family="${escapeXml(font.family)}"
-        font-size="${text.size}"
-        font-weight="${font.weight ?? 400}"
-        font-style="${font.style ?? "normal"}"
-        letter-spacing="${text.letterSpacing}"
-        fill="#111827"
-        xml:space="preserve"
-      >${safeLines.join("")}</text>
+      ${straightTextLayer}
+      ${circularTextLayer}
     </svg>
   `.trim();
+}
+
+function renderCircularText(
+  circularText: CircularTextExport,
+  fonts: FontChoice[],
+  fallbackFont: FontChoice,
+  showGuides: boolean,
+) {
+  const topFont = fonts.find((entry) => entry.id === circularText.topFontId) ?? fallbackFont;
+  const bottomFont = fonts.find((entry) => entry.id === circularText.bottomFontId) ?? fallbackFont;
+  const radius = Math.max(1, circularText.radius);
+  const left = 500 - radius;
+  const right = 500 + radius;
+  const centerY = circularText.y;
+  const topText = circularText.top;
+  const bottomText = circularText.bottom;
+
+  if (!topText.trim() && !bottomText.trim() && !showGuides) return "";
+
+  const guideLayer = showGuides
+    ? `<g fill="none" stroke="#176c55" stroke-width="2" stroke-dasharray="7 10" opacity="0.48" pointer-events="none">
+        <circle cx="500" cy="${centerY}" r="${Math.max(1, radius - 12)}" />
+        <circle cx="500" cy="${centerY}" r="${radius + circularText.size + 18}" />
+      </g>`
+    : "";
+
+  return `
+    <defs>
+      <path id="circular-top-path" d="M ${left} ${centerY} A ${radius} ${radius} 0 0 1 ${right} ${centerY}" />
+      <path id="circular-bottom-path" d="M ${left} ${centerY} A ${radius} ${radius} 0 0 0 ${right} ${centerY}" />
+    </defs>
+    ${guideLayer}
+    ${topText ? `<text
+      dy="-12"
+      font-family="${escapeXml(topFont.family)}"
+      font-size="${circularText.size}"
+      font-weight="${topFont.weight ?? 400}"
+      font-style="${topFont.style ?? "normal"}"
+      letter-spacing="${circularText.letterSpacing}"
+      fill="#111827"
+    ><textPath href="#circular-top-path" startOffset="50%" text-anchor="middle">${renderCircularSegments(topText, circularText.size, circularText.topSizeRuns)}</textPath></text>` : ""}
+    ${bottomText ? `<text
+      dy="${circularText.size + 12}"
+      font-family="${escapeXml(bottomFont.family)}"
+      font-size="${circularText.size}"
+      font-weight="${bottomFont.weight ?? 400}"
+      font-style="${bottomFont.style ?? "normal"}"
+      letter-spacing="${circularText.letterSpacing}"
+      fill="#111827"
+    ><textPath href="#circular-bottom-path" startOffset="50%" text-anchor="middle">${renderCircularSegments(bottomText, circularText.size, circularText.bottomSizeRuns)}</textPath></text>` : ""}
+  `;
+}
+
+function renderCircularSegments(
+  value: string,
+  fallbackSize: number,
+  runs: TextSizeRun[] = [],
+) {
+  if (!value) return "";
+
+  const segments: Array<{ value: string; size: number }> = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const size = sizeForIndex(index, fallbackSize, runs);
+    const previous = segments[segments.length - 1];
+
+    if (previous?.size === size) {
+      previous.value += value[index];
+    } else {
+      segments.push({ value: value[index], size });
+    }
+  }
+
+  return segments
+    .map((segment) => `<tspan font-size="${segment.size}">${escapeXml(segment.value)}</tspan>`)
+    .join("");
 }
 
 export function downloadTextFile(filename: string, contents: string, type: string) {

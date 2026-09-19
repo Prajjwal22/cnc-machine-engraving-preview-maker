@@ -2,6 +2,7 @@ import { ChangeEvent, PointerEvent, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
+  Circle,
   Crosshair,
   Download,
   Eye,
@@ -10,7 +11,6 @@ import {
   ImageDown,
   Leaf,
   Maximize2,
-  Menu,
   Minus,
   Move,
   Plus,
@@ -26,6 +26,7 @@ import {
   downloadPng,
   downloadTextFile,
   openPrintablePdf,
+  type CircularTextExport,
 } from "./export";
 
 type Align = "start" | "middle" | "end";
@@ -61,8 +62,15 @@ type TextSelection = {
   end: number;
 };
 
-type SectionId = "design" | "text" | "position" | "export";
+type CircularTextState = CircularTextExport & {
+  topSizeRuns: TextSizeRun[];
+  bottomSizeRuns: TextSizeRun[];
+};
+type CircularTextField = "top" | "bottom";
+type CircularTextSelection = TextSelection & { field: CircularTextField };
+type SectionId = "design" | "text" | "circular" | "position" | "export";
 type PreviewMode = "customer" | "cnc";
+type EngravingMode = "standard" | "circular";
 type MobileTab = "design" | "text" | "position";
 
 const initialText: TextState = {
@@ -77,6 +85,19 @@ const initialText: TextState = {
   y: 510,
   rotation: 0,
   align: "middle",
+};
+
+const initialCircularText: CircularTextState = {
+  top: "",
+  bottom: "",
+  topFontId: "F1",
+  bottomFontId: "F1",
+  topSizeRuns: [],
+  bottomSizeRuns: [],
+  size: 36,
+  letterSpacing: 1,
+  radius: 365,
+  y: 500,
 };
 
 const iconSize = 16;
@@ -287,10 +308,12 @@ function selectedSizeForRange(text: TextState, selection: TextSelection) {
 }
 
 export function App() {
+  const [engravingMode, setEngravingMode] = useState<EngravingMode>("standard");
   const [selectedDesignId, setSelectedDesignId] = useState("D1");
   const [selectedDesignCategoryId, setSelectedDesignCategoryId] =
     useState<DesignCategoryId>("round");
   const [text, setText] = useState<TextState>(initialText);
+  const [circularText, setCircularText] = useState<CircularTextState>(initialCircularText);
   const [showGrid, setShowGrid] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("customer");
@@ -298,12 +321,18 @@ export function App() {
   const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
     design: true,
     text: true,
+    circular: true,
     position: true,
     export: true,
   });
   const canvasRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const [textSelection, setTextSelection] = useState<TextSelection>({
+    start: 0,
+    end: 0,
+  });
+  const [circularSelection, setCircularSelection] = useState<CircularTextSelection>({
+    field: "top",
     start: 0,
     end: 0,
   });
@@ -322,10 +351,102 @@ export function App() {
   const selectionFontId = selectedFontIdForRange(text, textSelection) ?? text.fontId;
   const activeSize = selectedSizeForRange(text, textSelection) ?? text.size;
   const hasSelectedText = textSelection.end > textSelection.start;
-  const previewSvg = buildEngravingSvg(selectedDesign, selectedFont, text, fonts);
+  const circularSelectionValue = circularText[circularSelection.field];
+  const circularSelectionRuns =
+    circularSelection.field === "top"
+      ? circularText.topSizeRuns
+      : circularText.bottomSizeRuns;
+  const hasSelectedCircularText = circularSelection.end > circularSelection.start;
+  const activeCircularSize = hasSelectedCircularText
+    ? circularSelectionRuns.find(
+        (run) =>
+          circularSelection.start >= run.start && circularSelection.end <= run.end,
+      )?.size ?? circularText.size
+    : circularText.size;
+  const previewSvg = buildEngravingSvg(
+    selectedDesign,
+    selectedFont,
+    text,
+    fonts,
+    engravingMode === "circular" ? circularText : undefined,
+    engravingMode === "standard",
+    engravingMode === "standard",
+    engravingMode === "circular",
+  );
+  const exportArtworkSvg = buildEngravingSvg(
+    selectedDesign,
+    selectedFont,
+    text,
+    fonts,
+    engravingMode === "circular" ? circularText : undefined,
+    engravingMode === "standard",
+    engravingMode === "standard",
+  );
 
   function updateText<T extends keyof TextState>(key: T, value: TextState[T]) {
     setText((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateCircularText<T extends keyof CircularTextState>(
+    key: T,
+    value: CircularTextState[T],
+  ) {
+    setCircularText((current) => ({ ...current, [key]: value }));
+  }
+
+  function captureCircularSelection(
+    field: CircularTextField,
+    target: HTMLTextAreaElement,
+  ) {
+    setCircularSelection({
+      field,
+      start: target.selectionStart,
+      end: target.selectionEnd,
+    });
+  }
+
+  function handleCircularTextValueChange(
+    field: CircularTextField,
+    event: ChangeEvent<HTMLTextAreaElement>,
+  ) {
+    const nextValue = event.target.value;
+    const runsKey = field === "top" ? "topSizeRuns" : "bottomSizeRuns";
+    captureCircularSelection(field, event.target);
+    setCircularText((current) => ({
+      ...current,
+      [field]: nextValue,
+      [runsKey]: updateSizeRunsForValueChange(
+        current[field],
+        nextValue,
+        current[runsKey],
+      ),
+    }));
+  }
+
+  function applyCircularSizeChoice(size: number) {
+    setCircularText((current) => {
+      if (!hasSelectedCircularText) {
+        return {
+          ...current,
+          size,
+          topSizeRuns: current.topSizeRuns.filter((run) => run.size !== size),
+          bottomSizeRuns: current.bottomSizeRuns.filter((run) => run.size !== size),
+        };
+      }
+
+      const runsKey =
+        circularSelection.field === "top" ? "topSizeRuns" : "bottomSizeRuns";
+      return {
+        ...current,
+        [runsKey]: applySizeRun(
+          current[runsKey],
+          circularSelection,
+          size,
+          current.size,
+          circularSelectionValue.length,
+        ),
+      };
+    });
   }
 
   function captureTextSelection(target: HTMLTextAreaElement) {
@@ -427,13 +548,14 @@ export function App() {
 
     file
       .text()
-      .then((raw) => JSON.parse(raw) as { designId: string; text: TextState })
+      .then((raw) => JSON.parse(raw) as { designId: string; text: TextState; circularText?: CircularTextState })
       .then((project) => {
         const importedDesign =
           designs.find((design) => design.id === project.designId) ?? designs[0];
         setSelectedDesignId(importedDesign.id);
         setSelectedDesignCategoryId(importedDesign.categoryId);
         setText({ ...initialText, ...project.text });
+        setCircularText({ ...initialCircularText, ...project.circularText });
       })
       .catch(() => {
         window.alert("This project file could not be opened.");
@@ -444,19 +566,20 @@ export function App() {
   function exportProject() {
     downloadTextFile(
       "engraving-project.json",
-      JSON.stringify({ designId: selectedDesignId, text }, null, 2),
+      JSON.stringify({ designId: selectedDesignId, text, circularText }, null, 2),
       "application/json",
     );
   }
 
   function exportSvg() {
-    downloadTextFile("engraving-artwork.svg", previewSvg, "image/svg+xml");
+    downloadTextFile("engraving-artwork.svg", exportArtworkSvg, "image/svg+xml");
   }
 
   function resetAll() {
     setSelectedDesignId("D1");
     setSelectedDesignCategoryId("round");
     setText(initialText);
+    setCircularText(initialCircularText);
     setShowGrid(false);
     setZoom(100);
     setPreviewMode("customer");
@@ -471,27 +594,55 @@ export function App() {
           )
           .join("\n")}
       </style>
-      <header className="mx-auto mb-4 flex max-w-[1480px] items-center justify-between max-md:mb-3 max-md:h-10">
-        <button
-          className="hidden size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 shadow-sm max-md:grid"
-          type="button"
-          aria-label="Menu"
-        >
-          <Menu size={20} />
-        </button>
-        <div className="flex items-center gap-2.5 text-[#176c55] max-md:absolute max-md:left-1/2 max-md:-translate-x-1/2">
+      <header className="mx-auto mb-4 flex max-w-[1480px] items-center justify-between gap-3 max-md:mb-3">
+        <div className="flex shrink-0 items-center gap-2.5 text-[#176c55]">
           <span className="grid size-8 place-items-center rounded-lg bg-[#176c55] text-white">
             <Leaf size={18} />
           </span>
-          <span className="text-xl font-extrabold tracking-tight">Owleaf</span>
+          <span className="text-xl font-extrabold tracking-tight max-md:hidden">Owleaf</span>
         </div>
+        <nav
+          className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm"
+          aria-label="Engraving editor"
+        >
+          <button
+            className={[
+              "inline-flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-extrabold transition max-md:px-2 max-md:text-xs",
+              engravingMode === "standard"
+                ? "bg-[#176c55] text-white"
+                : "text-slate-700 hover:bg-slate-50",
+            ].join(" ")}
+            type="button"
+            aria-pressed={engravingMode === "standard"}
+            onClick={() => setEngravingMode("standard")}
+          >
+            <Type size={16} />
+            <span className="max-md:hidden">Standard Engraving</span>
+            <span className="md:hidden">Standard</span>
+          </button>
+          <button
+            className={[
+              "inline-flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-extrabold transition max-md:px-2 max-md:text-xs",
+              engravingMode === "circular"
+                ? "bg-[#176c55] text-white"
+                : "text-slate-700 hover:bg-slate-50",
+            ].join(" ")}
+            type="button"
+            aria-pressed={engravingMode === "circular"}
+            onClick={() => setEngravingMode("circular")}
+          >
+            <Circle size={16} />
+            <span className="max-md:hidden">Circular Engraving</span>
+            <span className="md:hidden">Circular</span>
+          </button>
+        </nav>
         <button
-          className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-[#176c55]/40 hover:text-[#176c55]"
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-[#176c55]/40 hover:text-[#176c55] max-md:size-10 max-md:justify-center max-md:px-0"
           type="button"
           onClick={resetAll}
         >
           <RefreshCcw size={iconSize} />
-          Reset
+          <span className="max-md:hidden">Reset</span>
         </button>
       </header>
 
@@ -502,13 +653,24 @@ export function App() {
               Owleaf Engraving Studio
             </p>
             <h1 className="max-w-[330px] text-[27px] font-extrabold leading-[1.06] tracking-tight text-slate-950">
-              Preview and export straight-line engraving artwork.
+              Preview and export engraving artwork.
             </h1>
           </div>
 
-          <MobileTabs active={mobileTab} onChange={setMobileTab} />
+          {engravingMode === "standard" ? (
+            <WorkspaceTabs active={mobileTab} onChange={setMobileTab} />
+          ) : (
+            <div className="mb-3 rounded-xl border border-[#176c55]/20 bg-[#e7f3ef] px-4 py-3">
+              <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#176c55]">
+                Circular Engraving
+              </p>
+              <p className="mt-1 text-sm font-medium text-[#2e6657]">
+                Shape lettering around the top and bottom of the design.
+              </p>
+            </div>
+          )}
 
-          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "design" ? "max-md:hidden" : ""].join(" ")}>
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", engravingMode !== "standard" || mobileTab !== "design" ? "hidden" : ""].join(" ")}>
             <PanelTitle
               title="Design"
               value={selectedDesign.label}
@@ -580,7 +742,7 @@ export function App() {
             ) : null}
           </section>
 
-          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "text" ? "max-md:hidden" : ""].join(" ")}>
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", engravingMode !== "standard" || mobileTab !== "text" ? "hidden" : ""].join(" ")}>
             <PanelTitle
               title="Text"
               open={openSections.text}
@@ -684,7 +846,96 @@ export function App() {
             ) : null}
           </section>
 
-          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "position" ? "max-md:hidden" : ""].join(" ")}>
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", engravingMode !== "circular" ? "hidden" : ""].join(" ")}>
+            <PanelTitle
+              title="Circular text"
+              value="Compass order"
+              open={openSections.circular}
+              onToggle={() => toggleSection("circular")}
+            />
+            {openSections.circular ? (
+            <div className="grid gap-4">
+              <div className="rounded-lg border border-[#176c55]/20 bg-[#e7f3ef] px-3 py-2 text-xs font-semibold leading-5 text-[#0e4f3f]">
+                Add lettering around the dotted guides. Circular engraving does not include a wreath design.
+              </div>
+              <label className="grid gap-2" htmlFor="circular-top-text">
+                <span className="text-xs font-bold text-slate-600">Top engraving</span>
+                <textarea
+                  className="min-h-20 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
+                  id="circular-top-text"
+                  value={circularText.top}
+                  onChange={(event) => handleCircularTextValueChange("top", event)}
+                  onKeyUp={(event) => captureCircularSelection("top", event.currentTarget)}
+                  onMouseUp={(event) => captureCircularSelection("top", event.currentTarget)}
+                  onSelect={(event) => captureCircularSelection("top", event.currentTarget)}
+                  placeholder="Top compass text"
+                  rows={2}
+                />
+              </label>
+              <label className="grid gap-2" htmlFor="circular-top-font">
+                <span className="text-xs font-bold text-slate-600">Top font</span>
+                <select
+                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
+                  id="circular-top-font"
+                  value={circularText.topFontId}
+                  onChange={(event) => updateCircularText("topFontId", event.target.value)}
+                >
+                  {fonts.map((font) => <option key={font.id} value={font.id}>{font.id} - {font.name}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-2" htmlFor="circular-bottom-text">
+                <span className="text-xs font-bold text-slate-600">Bottom engraving</span>
+                <textarea
+                  className="min-h-20 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
+                  id="circular-bottom-text"
+                  value={circularText.bottom}
+                  onChange={(event) => handleCircularTextValueChange("bottom", event)}
+                  onKeyUp={(event) => captureCircularSelection("bottom", event.currentTarget)}
+                  onMouseUp={(event) => captureCircularSelection("bottom", event.currentTarget)}
+                  onSelect={(event) => captureCircularSelection("bottom", event.currentTarget)}
+                  placeholder="Bottom compass text"
+                  rows={2}
+                />
+              </label>
+              <label className="grid gap-2" htmlFor="circular-bottom-font">
+                <span className="text-xs font-bold text-slate-600">Bottom font</span>
+                <select
+                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
+                  id="circular-bottom-font"
+                  value={circularText.bottomFontId}
+                  onChange={(event) => updateCircularText("bottomFontId", event.target.value)}
+                >
+                  {fonts.map((font) => <option key={font.id} value={font.id}>{font.id} - {font.name}</option>)}
+                </select>
+              </label>
+              {hasSelectedCircularText ? (
+                <div className="rounded-lg border border-[#176c55]/20 bg-[#e7f3ef] px-3 py-2 text-xs font-semibold text-[#0e4f3f]">
+                  Sizing selected {circularSelection.field} text from character {circularSelection.start + 1} to {circularSelection.end}.
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+                  Select part of the top or bottom text to give only that selection a different size.
+                </div>
+              )}
+              <Range
+                label={hasSelectedCircularText ? "Selected size" : "Circular size"}
+                min={18}
+                max={72}
+                value={activeCircularSize}
+                onChange={applyCircularSizeChoice}
+              />
+              <Range
+                label="Ring radius"
+                min={300}
+                max={430}
+                value={circularText.radius}
+                onChange={(value) => updateCircularText("radius", value)}
+              />
+            </div>
+            ) : null}
+          </section>
+
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", engravingMode !== "standard" || mobileTab !== "position" ? "hidden" : ""].join(" ")}>
             <PanelTitle
               title="Position"
               open={openSections.position}
@@ -784,12 +1035,12 @@ export function App() {
               <ExportButton
                 icon={<ImageDown size={iconSize} />}
                 label="PNG"
-                onClick={() => void downloadPng(previewSvg)}
+                onClick={() => void downloadPng(exportArtworkSvg)}
               />
               <ExportButton
                 icon={<FileDown size={iconSize} />}
                 label="PDF"
-                onClick={() => openPrintablePdf(previewSvg)}
+                onClick={() => openPrintablePdf(exportArtworkSvg)}
               />
               <ExportButton
                 icon={<Save size={iconSize} />}
@@ -890,7 +1141,7 @@ export function App() {
                 </IconButton>
                 <IconButton
                   label="Download PNG"
-                  onClick={() => void downloadPng(previewSvg)}
+                  onClick={() => void downloadPng(exportArtworkSvg)}
                 >
                   <Download size={iconSize} />
                 </IconButton>
@@ -927,14 +1178,15 @@ export function App() {
               <div
                 ref={canvasRef}
                 className={[
-                  "mobile-artboard relative aspect-square min-w-[360px] max-w-[820px] cursor-crosshair border border-slate-200 shadow-[0_16px_32px_rgba(25,32,40,0.18)] max-md:min-w-0 [&_svg]:block [&_svg]:h-full [&_svg]:w-full",
+                  "mobile-artboard relative aspect-square min-w-[360px] max-w-[820px] border border-slate-200 shadow-[0_16px_32px_rgba(25,32,40,0.18)] max-md:min-w-0 [&_svg]:block [&_svg]:h-full [&_svg]:w-full",
+                  engravingMode === "standard" ? "cursor-crosshair" : "cursor-default",
                   previewMode === "cnc" ? "bg-transparent shadow-none" : "bg-white",
                 ].join(" ")}
                 style={{ width: `${zoom}%` }}
                 dangerouslySetInnerHTML={{ __html: previewSvg }}
                 aria-label="Engraving artwork preview"
-                onPointerDown={handleCanvasPointerDown}
-                onPointerMove={handleCanvasPointerMove}
+                onPointerDown={engravingMode === "standard" ? handleCanvasPointerDown : undefined}
+                onPointerMove={engravingMode === "standard" ? handleCanvasPointerMove : undefined}
               />
             </div>
 
@@ -943,12 +1195,16 @@ export function App() {
                 <InfoItem
                   icon={<OwleafMini />}
                   label="Design"
-                  value={selectedDesign.name}
+                  value={engravingMode === "circular" ? "No wreath" : selectedDesign.name}
                 />
                 <InfoItem
                   icon={<Type size={25} />}
-                  label="Font"
-                  value={`${selectedFont.id} - ${selectedFont.name}`}
+                  label={engravingMode === "circular" ? "Fonts" : "Font"}
+                  value={
+                    engravingMode === "circular"
+                      ? `${circularText.topFontId} / ${circularText.bottomFontId}`
+                      : `${selectedFont.id} - ${selectedFont.name}`
+                  }
                 />
                 <InfoItem
                   icon={<Maximize2 size={22} />}
@@ -1002,7 +1258,7 @@ function PanelTitle({
   );
 }
 
-function MobileTabs({
+function WorkspaceTabs({
   active,
   onChange,
 }: {
@@ -1016,7 +1272,7 @@ function MobileTabs({
   ];
 
   return (
-    <div className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1 md:hidden">
+    <div className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1">
       {tabs.map((tab) => (
         <button
           className={[
