@@ -14,6 +14,17 @@ type TextExport = {
   align: "start" | "middle" | "end";
 };
 
+export type CircularTextExport = {
+  top: string;
+  bottom: string;
+  topFontId: string;
+  bottomFontId: string;
+  size: number;
+  letterSpacing: number;
+  radius: number;
+  y: number;
+};
+
 type TextFontRun = {
   start: number;
   end: number;
@@ -94,6 +105,8 @@ export function buildEngravingSvg(
   font: FontChoice,
   text: TextExport,
   fonts: FontChoice[] = [font],
+  circularText?: CircularTextExport,
+  includeWreath = true,
 ) {
   const lines = text.value.split(/\r?\n/);
   let lineStart = 0;
@@ -113,7 +126,7 @@ export function buildEngravingSvg(
     lineStart += line.length + 1;
     return rendered;
   });
-  const wreathLayer = design.none
+  const wreathLayer = design.none || !includeWreath
     ? ""
     : `
       <image
@@ -125,6 +138,19 @@ export function buildEngravingSvg(
         height="1000"
         preserveAspectRatio="xMidYMid meet"
       />`;
+  const topCircularFont = fonts.find((entry) => entry.id === circularText?.topFontId) ?? font;
+  const bottomCircularFont = fonts.find((entry) => entry.id === circularText?.bottomFontId) ?? font;
+  const circularTextLayer = circularText
+    ? `
+      <defs>
+        <path id="circular-text-top" d="M ${500 - circularText.radius},${circularText.y} A ${circularText.radius},${circularText.radius} 0 0,1 ${500 + circularText.radius},${circularText.y}" fill="none" />
+        <path id="circular-text-bottom" d="M ${500 - circularText.radius},${circularText.y} A ${circularText.radius},${circularText.radius} 0 0,0 ${500 + circularText.radius},${circularText.y}" fill="none" />
+      </defs>
+      <circle cx="500" cy="${circularText.y}" r="${circularText.radius}" fill="none" stroke="#94a3b8" stroke-width="3" stroke-dasharray="10 12" opacity="0.65" />
+      <circle cx="500" cy="${circularText.y}" r="${circularText.radius - 26}" fill="none" stroke="#94a3b8" stroke-width="3" stroke-dasharray="10 12" opacity="0.65" />
+      ${circularText.top ? `<text fill="#111827" letter-spacing="${circularText.letterSpacing}" font-family="${escapeXml(topCircularFont.family)}" font-size="${circularText.size}" text-anchor="middle"><textPath href="#circular-text-top" startOffset="50%">${escapeXml(circularText.top)}</textPath></text>` : ""}
+      ${circularText.bottom ? `<text fill="#111827" letter-spacing="${circularText.letterSpacing}" font-family="${escapeXml(bottomCircularFont.family)}" font-size="${circularText.size}" text-anchor="middle"><textPath href="#circular-text-bottom" startOffset="50%">${escapeXml(circularText.bottom)}</textPath></text>` : ""}`
+    : "";
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img">
@@ -139,6 +165,7 @@ export function buildEngravingSvg(
           .join("\n")}
       </style>
       ${wreathLayer}
+      ${circularTextLayer}
       <text
         x="${text.x}"
         y="${text.y}"
