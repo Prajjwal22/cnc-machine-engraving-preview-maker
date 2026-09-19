@@ -26,7 +26,6 @@ import {
   downloadPng,
   downloadTextFile,
   openPrintablePdf,
-  type CircularTextExport,
 } from "./export";
 
 type Align = "start" | "middle" | "end";
@@ -62,10 +61,9 @@ type TextSelection = {
   end: number;
 };
 
-type CircularTextState = CircularTextExport;
-type SectionId = "design" | "text" | "circular" | "position" | "export";
+type SectionId = "design" | "text" | "position" | "export";
 type PreviewMode = "customer" | "cnc";
-type MobileTab = "design" | "text" | "circular" | "position";
+type MobileTab = "design" | "text" | "position";
 
 const initialText: TextState = {
   value: "",
@@ -79,17 +77,6 @@ const initialText: TextState = {
   y: 510,
   rotation: 0,
   align: "middle",
-};
-
-const initialCircularText: CircularTextState = {
-  top: "",
-  bottom: "",
-  topFontId: "F1",
-  bottomFontId: "F1",
-  size: 36,
-  letterSpacing: 1,
-  radius: 365,
-  y: 500,
 };
 
 const iconSize = 16;
@@ -304,7 +291,6 @@ export function App() {
   const [selectedDesignCategoryId, setSelectedDesignCategoryId] =
     useState<DesignCategoryId>("round");
   const [text, setText] = useState<TextState>(initialText);
-  const [circularText, setCircularText] = useState<CircularTextState>(initialCircularText);
   const [showGrid, setShowGrid] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("customer");
@@ -312,7 +298,6 @@ export function App() {
   const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
     design: true,
     text: true,
-    circular: true,
     position: true,
     export: true,
   });
@@ -337,24 +322,10 @@ export function App() {
   const selectionFontId = selectedFontIdForRange(text, textSelection) ?? text.fontId;
   const activeSize = selectedSizeForRange(text, textSelection) ?? text.size;
   const hasSelectedText = textSelection.end > textSelection.start;
-  const previewSvg = buildEngravingSvg(
-    selectedDesign,
-    selectedFont,
-    text,
-    fonts,
-    mobileTab === "circular" ? circularText : undefined,
-    mobileTab !== "circular",
-  );
+  const previewSvg = buildEngravingSvg(selectedDesign, selectedFont, text, fonts);
 
   function updateText<T extends keyof TextState>(key: T, value: TextState[T]) {
     setText((current) => ({ ...current, [key]: value }));
-  }
-
-  function updateCircularText<T extends keyof CircularTextState>(
-    key: T,
-    value: CircularTextState[T],
-  ) {
-    setCircularText((current) => ({ ...current, [key]: value }));
   }
 
   function captureTextSelection(target: HTMLTextAreaElement) {
@@ -456,14 +427,13 @@ export function App() {
 
     file
       .text()
-      .then((raw) => JSON.parse(raw) as { designId: string; text: TextState; circularText?: CircularTextState })
+      .then((raw) => JSON.parse(raw) as { designId: string; text: TextState })
       .then((project) => {
         const importedDesign =
           designs.find((design) => design.id === project.designId) ?? designs[0];
         setSelectedDesignId(importedDesign.id);
         setSelectedDesignCategoryId(importedDesign.categoryId);
         setText({ ...initialText, ...project.text });
-        setCircularText({ ...initialCircularText, ...project.circularText });
       })
       .catch(() => {
         window.alert("This project file could not be opened.");
@@ -474,7 +444,7 @@ export function App() {
   function exportProject() {
     downloadTextFile(
       "engraving-project.json",
-      JSON.stringify({ designId: selectedDesignId, text, circularText }, null, 2),
+      JSON.stringify({ designId: selectedDesignId, text }, null, 2),
       "application/json",
     );
   }
@@ -487,7 +457,6 @@ export function App() {
     setSelectedDesignId("D1");
     setSelectedDesignCategoryId("round");
     setText(initialText);
-    setCircularText(initialCircularText);
     setShowGrid(false);
     setZoom(100);
     setPreviewMode("customer");
@@ -533,13 +502,13 @@ export function App() {
               Owleaf Engraving Studio
             </p>
             <h1 className="max-w-[330px] text-[27px] font-extrabold leading-[1.06] tracking-tight text-slate-950">
-              Preview and export engraving artwork.
+              Preview and export straight-line engraving artwork.
             </h1>
           </div>
 
-          <WorkspaceTabs active={mobileTab} onChange={setMobileTab} />
+          <MobileTabs active={mobileTab} onChange={setMobileTab} />
 
-          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "design" ? "hidden" : ""].join(" ")}>
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "design" ? "max-md:hidden" : ""].join(" ")}>
             <PanelTitle
               title="Design"
               value={selectedDesign.label}
@@ -611,7 +580,7 @@ export function App() {
             ) : null}
           </section>
 
-          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "text" ? "hidden" : ""].join(" ")}>
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "text" ? "max-md:hidden" : ""].join(" ")}>
             <PanelTitle
               title="Text"
               open={openSections.text}
@@ -715,81 +684,7 @@ export function App() {
             ) : null}
           </section>
 
-          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "circular" ? "hidden" : ""].join(" ")}>
-            <PanelTitle
-              title="Circular text"
-              value="Compass order"
-              open={openSections.circular}
-              onToggle={() => toggleSection("circular")}
-            />
-            {openSections.circular ? (
-            <div className="grid gap-4">
-              <div className="rounded-lg border border-[#176c55]/20 bg-[#e7f3ef] px-3 py-2 text-xs font-semibold leading-5 text-[#0e4f3f]">
-                Add separate lettering to the top and bottom of the compass ring.
-              </div>
-              <label className="grid gap-2" htmlFor="circular-top-text">
-                <span className="text-xs font-bold text-slate-600">Top engraving</span>
-                <textarea
-                  className="min-h-20 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
-                  id="circular-top-text"
-                  value={circularText.top}
-                  onChange={(event) => updateCircularText("top", event.target.value)}
-                  placeholder="Top compass text"
-                  rows={2}
-                />
-              </label>
-              <label className="grid gap-2" htmlFor="circular-top-font">
-                <span className="text-xs font-bold text-slate-600">Top font</span>
-                <select
-                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
-                  id="circular-top-font"
-                  value={circularText.topFontId}
-                  onChange={(event) => updateCircularText("topFontId", event.target.value)}
-                >
-                  {fonts.map((font) => <option key={font.id} value={font.id}>{font.id} - {font.name}</option>)}
-                </select>
-              </label>
-              <label className="grid gap-2" htmlFor="circular-bottom-text">
-                <span className="text-xs font-bold text-slate-600">Bottom engraving</span>
-                <textarea
-                  className="min-h-20 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
-                  id="circular-bottom-text"
-                  value={circularText.bottom}
-                  onChange={(event) => updateCircularText("bottom", event.target.value)}
-                  placeholder="Bottom compass text"
-                  rows={2}
-                />
-              </label>
-              <label className="grid gap-2" htmlFor="circular-bottom-font">
-                <span className="text-xs font-bold text-slate-600">Bottom font</span>
-                <select
-                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-[#176c55] focus:ring-4 focus:ring-[#176c55]/10"
-                  id="circular-bottom-font"
-                  value={circularText.bottomFontId}
-                  onChange={(event) => updateCircularText("bottomFontId", event.target.value)}
-                >
-                  {fonts.map((font) => <option key={font.id} value={font.id}>{font.id} - {font.name}</option>)}
-                </select>
-              </label>
-              <Range
-                label="Circular size"
-                min={18}
-                max={72}
-                value={circularText.size}
-                onChange={(value) => updateCircularText("size", value)}
-              />
-              <Range
-                label="Ring radius"
-                min={300}
-                max={430}
-                value={circularText.radius}
-                onChange={(value) => updateCircularText("radius", value)}
-              />
-            </div>
-            ) : null}
-          </section>
-
-          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "position" ? "hidden" : ""].join(" ")}>
+          <section className={["border-b border-slate-200 py-5 max-md:py-3", mobileTab !== "position" ? "max-md:hidden" : ""].join(" ")}>
             <PanelTitle
               title="Position"
               open={openSections.position}
@@ -1107,7 +1002,7 @@ function PanelTitle({
   );
 }
 
-function WorkspaceTabs({
+function MobileTabs({
   active,
   onChange,
 }: {
@@ -1117,12 +1012,11 @@ function WorkspaceTabs({
   const tabs: Array<{ id: MobileTab; label: string; icon: React.ReactNode }> = [
     { id: "design", label: "Design", icon: <Grid3X3 size={16} /> },
     { id: "text", label: "Text", icon: <Type size={17} /> },
-    { id: "circular", label: "Circular", icon: <RefreshCcw size={16} /> },
     { id: "position", label: "Position", icon: <Move size={16} /> },
   ];
 
   return (
-    <div className="mb-3 grid grid-cols-4 gap-1 rounded-xl border border-slate-200 bg-white p-1">
+    <div className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-1 md:hidden">
       {tabs.map((tab) => (
         <button
           className={[
