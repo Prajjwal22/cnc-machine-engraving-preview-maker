@@ -657,18 +657,9 @@ export function App() {
             </h1>
           </div>
 
-          {engravingMode === "standard" ? (
+          {engravingMode === "standard" && (
             <WorkspaceTabs active={mobileTab} onChange={setMobileTab} />
-          ) : (
-            <div className="mb-3 rounded-xl border border-[#176c55]/20 bg-[#e7f3ef] px-4 py-3">
-              <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#176c55]">
-                Circular Engraving
-              </p>
-              <p className="mt-1 text-sm font-medium text-[#2e6657]">
-                Shape lettering around the top and bottom of the design.
-              </p>
-            </div>
-          )}
+          ) }
 
           <section className={["border-b border-slate-200 py-5 max-md:py-3", engravingMode !== "standard" || mobileTab !== "design" ? "hidden" : ""].join(" ")}>
             <PanelTitle
